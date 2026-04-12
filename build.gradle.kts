@@ -11,6 +11,7 @@ plugins {
     id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
+version = "1.0.0" // version line
 group = "com.ido"
 description = "HelloWorld"
 
