@@ -1,36 +1,56 @@
-name: Java CI with Gradle
+name: Kepler Signal - Erez
 
-on:
-  push:
-    branches: [ "**" ]  # Runs on every push to any branch
-  pull_request:
-    branches: [ "main" ] # Runs on PRs targeting the main branch
-
-permissions:
-  contents: read
+# This workflow builds the Java application, updates versioning,
+# and pushes a secure Docker image to Docker Hub.
+on: [push, pull_request]
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      # Updates the build.gradle.kts version dynamically using the GitHub run number
+      - name: Auto-increment Version
+        run: |
+          VERSION="1.0.${{ github.run_number }}"
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+          sed -i "s/version = .*/version = \"$VERSION\"/" build.gradle.kts
+
+      - name: Build and Package
+        run: |
+          chmod +x gradlew
+          ./gradlew build
+
+      # Use v4 to ensure compatibility and avoid node.js deprecation warnings
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          # Sets up the specific JDK needed for your GraalVM build
-          java-version: '17'
-          java-distribution: 'graalvm'
-          # Caching is enabled by default in v3
+          name: gradle-hello-${{ env.APP_VERSION }}
+          path: build/libs/*.jar
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      # Condition check: Ensures Docker steps run only on internal pushes where secrets are available
+      - name: Login to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build with Gradle
-        run: ./gradlew build
+      - name: Build and Push Docker
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/kepler-signal:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/kepler-signal:${{ env.APP_VERSION }}
 
-      # Optional: Uncomment this if you want the CI to verify the Native Image build
-      # - name: Build Native Image
-      #   run: ./gradlew nativeCompile
+      # Final verification step by running the newly pushed image
+      - name: Run and Verify Signal
+        if: github.event_name == 'push'
+        run: |
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/kepler-signal:${{ env.APP_VERSION }}
+          docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/kepler-signal:${{ env.APP_VERSION }}
