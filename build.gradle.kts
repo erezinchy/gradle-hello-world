@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "1.6.20"
     id("application")
-    id("java")
+    // id("java")
     id("idea")
 
     // This is used to create a GraalVM native image
@@ -34,5 +34,11 @@ graalvmNative {
                 vendor.set(JvmVendorSpec.matching("GraalVM Community"))
             })
         }
+    }
+}
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
 }
